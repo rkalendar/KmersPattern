@@ -1,5 +1,25 @@
-## GeneDistance
-## Identifications of genetic similarity or the distance between genomic sequences (in approximate string matching)
+# GeneDistance
+
+**Identification of genetic similarity, or the distance, between genomic sequences (approximate string matching)**
+
+[![Java](https://img.shields.io/badge/Java-26+-orange.svg)](https://www.oracle.com/java/technologies/downloads/)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)]()
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
+
+Six measures over one input, each answering a different question: are these two
+sequences alike as a whole (`-vector`, `-d2star`, `-cosine`, `-spacing`), how much
+of one occurs in the other (`-contain`), and where (`-scan`).
+
+## Contents
+
+- [Requirements](#requirements) · [Installation](#installation) · [Basic usage](#basic-usage) · [Options](#options)
+- [Sequences of unequal length](#sequences-of-unequal-length)
+- [Fragments of very different length: `-vector`](#fragments-of-very-different-length--vector)
+- [A short element inside a long sequence](#a-short-element-inside-a-long-sequence)
+- [Chromosome-scale input (up to 2 Gb): `-scaled`](#chromosome-scale-input-up-to-2-gb--scaled)
+- [FASTA larger than 2 GB](#fasta-larger-than-2-gb)
+- [Where the element sits](#where-the-element-sits)
+- [Output](#output) · [Examples](#examples)
 
 ## Author
 Ruslan Kalendar 
@@ -74,30 +94,57 @@ default, the k-mer spacing measure, is now ```-spacing```.
 
 | Option | Meaning |
 | --- | --- |
-| ```-kmer=N``` | set of k-mers used in the analysis, ```N``` = 4/5/6/8/10 (symmetric) or 41/61/81/101 (non-symmetric), default ```-kmer=4``` |
+| ```-kmer=N``` | set of k-mers used in the analysis: ```4```/```5```/```6```/```8```/```10``` or ```41```/```61```/```81```/```101```, default ```-kmer=4``` (see [what the numbers mean](#what-the--kmer-numbers-mean)) |
 | ```-vector``` | **the default** — a method for homology between fragments of very different length. A short sequence is compared to the **best window** of a longer one at its own scale, on **either strand**, and a score counts only when it clears the **chance level measured from the input itself** for that length class. The per-window comparison of two composition profiles is equivalent to the *d2\** statistic (k-mer counts centred on the base composition); the local window, the two strands and the calibrated floor are ```-vector```'s own — none of them part of *d2\** |
 | ```-spacing``` | the former default: how the k-mers are *spaced* inside each sequence |
 | ```-d2star``` | compare the k-mer **frequencies** instead of their spacing, each count centred on the base composition of its own sequence (the *d2\** measure) |
 | ```-cosine``` | the same, on the raw frequencies, without centring |
-| ```-contain``` | **containment**: how much of each sequence occurs in each other one, on the whole k-mer space. Finds a short element inside a long sequence |
+| ```-contain```, ```-contain=K``` | **containment**: how much of each sequence occurs in each other one, on the whole k-mer space. Finds a short element inside a long sequence. ```-contain=K``` sets the exact k in one go, as ```-ksize=K``` does |
 | ```-scan```, ```-scan=N``` | **where** each sequence holds the query: a window the size of the query is walked along them. The query is the first sequence of the input, or the N-th |
-| ```-ksize=K``` | the k of the exact k-mers ```-contain``` and ```-scan``` use (6-31). Chosen for the length of the sequences unless given |
-| ```-scaled=N``` | **FracMinHash** for ```-contain``` / ```-scan```: keep only ~1/N of the k-mers so a 2 Gb genome fits in memory. ```N=1``` is exact; ```-scaled``` or ```-scaled=auto``` chooses N for the size |
+| ```-ksize=K``` | the k of the exact k-mers ```-contain``` and ```-scan``` use (6-31, 11-16 suits most cases). Chosen for the length of the sequences unless given. It is unrelated to ```-kmer=```, which names one of the sets above |
+| ```-scaled=N``` | **FracMinHash** for ```-contain``` / ```-scan```: keep only ~1/N of the k-mers so a 2 Gb genome fits in memory (N = 1…1000000). ```N=1``` is the default and is exact; ```-scaled``` or ```-scaled=auto``` chooses N for the size |
 | ```-kmerstat``` | report the k-mer distances of each sequence, instead of comparing them |
 | ```-kmer2stat``` | report the k-mer distances averaged over all the target sequences |
-| ```-h```, ```--help``` | print the help and exit |
+| ```-h```, ```--help```, ```-?```, ```/?``` | print the help and exit |
 | ```--version``` | print the version and exit |
+
+```-d2*``` is accepted for ```-d2star``` and ```-space``` for ```-spacing```. Option names are
+case-insensitive and any number of leading dashes is accepted (```-vector```, ```--vector```), but
+an option must carry at least one — ```kmer=N``` alone is the only exception, anything else without
+a dash is taken for the input path. **An option that is not recognised is ignored without a
+message**, so a misspelt measure leaves the default one running: check the ```Measure:``` line each
+run prints before trusting a result.
+
+The first argument that is not an option is the target file or folder; giving a second one is an
+error. Given a folder, every file in it is read and all their sequences are pooled into **one**
+analysis.
+
+### What the ```-kmer=``` numbers mean
+
+| Value | k-mer set | Value | k-mer set |
+| --- | --- | --- | --- |
+| ```4``` (default) | symmetric and mirror 4-mers | ```41``` | non-symmetric 4-mers |
+| ```5``` | symmetric 5-mers | ```61``` | non-symmetric 6-mers |
+| ```6``` | symmetric 6-mers | ```81``` | non-symmetric 8-mers |
+| ```8``` | symmetric 8-mers | ```101``` | non-symmetric 10-mers |
+| ```10``` | symmetric 10-mers | | |
+
+The two-digit forms are the same word lengths counted without folding a k-mer together with its
+reverse complement: ```41``` is the non-symmetric 4-mer set, ```101``` the non-symmetric 10-mer one.
+The set in force is printed at the start of every run. ```-kmer=``` does not apply to ```-contain```
+and ```-scan```, which use exact k-mers of length ```-ksize=K```.
 
 
 ### Sequences of unequal length
 
-The default measure compares how the k-mers are *spaced* inside each sequence, and a k-mer only
-counts once it has been seen at least twice. A short sequence therefore arrives with an almost
-empty vector, and its homology to a long one goes unseen. Use ```-d2star``` there. On
-```test/2.txt``` (18S rRNA of macaque and man, the same 18S diluted with random DNA, and three
-random sequences), with ```-kmer=41```:
+The spacing measure — ```-spacing```, the former default — compares how the k-mers are *spaced*
+inside each sequence, and a k-mer only counts once it has been seen at least twice. A short sequence
+therefore arrives with an almost empty vector, and its homology to a long one goes unseen. That is
+why it is no longer the default: use ```-d2star``` there, or ```-vector``` (the default) when the
+lengths differ by more than a few fold. On ```test/2.txt``` (18S rRNA of macaque and man, the same
+18S diluted with random DNA, and three random sequences), with ```-kmer=41```:
 
-| pair | truth | default | ```-cosine``` | ```-d2star``` |
+| pair | truth | ```-spacing``` | ```-cosine``` | ```-d2star``` |
 | --- | --- | --- | --- | --- |
 | 18S macaque / 18S human | orthologs | 99 | 100 | 100 |
 | 18S / the 18S-28S unit holding it | homologous | 55 | 83 | 51 |
@@ -273,7 +320,11 @@ Written next to the input (```result_kN.*``` when a folder is given):
 | ```<input>_cK.meg``` | ```-contain```: distance matrix (1 - identity) for MEGA |
 | ```<input>_scanK.xls``` | ```-scan```: best window per sequence, the regions that hold the query (position, identity, E-value) and the containment profile |
 
-Exit codes: 0 = done, 1 = wrong usage or no sequence found, 2 = I/O error.
+A ```-cosine```, ```-d2star``` or ```-vector``` run writes ```_kN_cos.*```, ```_kN_d2s.*``` or
+```_kN_vec.*```; a sketched ```-contain``` / ```-scan``` writes ```_cKsN.*``` / ```_scanKsN.*```. No
+report ever overwrites the report of another measure.
+
+Exit codes: 0 = done, 1 = wrong usage or no sequence found, 2 = I/O error or out of memory.
 
 
 ### Examples:
